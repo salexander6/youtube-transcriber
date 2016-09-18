@@ -4,58 +4,45 @@ var path = require('path');
 var Promise = require('bluebird');
 
 var speech_to_text = watson.speech_to_text({
-  username: <YOUR CREDS HERE>,
-  password: <YOUR CREDS HERE>,
+  password: "XAxkdULqz4zz",
+  username: "a22a55e6-f7c3-41b3-b6b1-4a4716e234a0",
   version: 'v1',
   url: 'https://stream.watsonplatform.net/speech-to-text/api',
+
 });
 
-exports.watsonSpeechToText = function(audioFile) {
+exports.watsonSpeechToText = function(audioFile, transcriptFile) {
 
   return new Promise(function(resolve, reject) {
 
     var params = {
       content_type: 'audio/flac',
       timestamps: true,
-      continuous: true
+      continuous: true,
+      interim_results: true
     };
 
-    var results = [];
-
-    // create the stream
+    // Create the stream.
     var recognizeStream = speech_to_text.createRecognizeStream(params);
 
-    // pipe in some audio
+    // Pipe in the audio.
     fs.createReadStream(audioFile).pipe(recognizeStream);
 
-    // listen for 'data' events for just the final text
-    // listen for 'results' events to get the raw JSON with interim results, timings, etc.
+    // Pipe out the transcription to a file.
+    recognizeStream.pipe(fs.createWriteStream(transcriptFile));
 
-    recognizeStream.setEncoding('utf8'); // to get strings instead of Buffers from `data` events
+    // Get strings instead of buffers from 'data' events.
+    recognizeStream.setEncoding('utf8');
 
-    recognizeStream.on('results', function(e) {
-      if (e.results[0].final) {
-        results.push(e);
-      }
-    });
+    // Listen for events.
+    recognizeStream.on('data', function(event) { onEvent('Data:', event); });
+    recognizeStream.on('results', function(event) { onEvent('Results:', event); });
+    recognizeStream.on('error', function(event) { onEvent('Error:', event); });
+    recognizeStream.on('close-connection', function(event) { onEvent('Close:', event); });
 
-    ['data', 'results', 'error', 'connection-close'].forEach(function(eventName) {
-      recognizeStream.on(eventName, console.log.bind(console, eventName + ' event: '));
-    });
-
-    recognizeStream.on('error', function(err) {
-      util.handleError('Error writing to transcript.json: ' + err);
-    });
-
-    recognizeStream.on('connection-close', function() {
-    	var transcriptFile = path.join(__dirname, 'transcript.json');
-
-      fs.writeFile(transcriptFile, JSON.stringify(results), function(err) {
-        if (err) {
-          util.handleError(err);
-        }
-        resolve();
-      });
-    });
+    // Displays events on the console.
+    function onEvent(name, event) {
+        console.log(name, JSON.stringify(event, null, 2));
+    };
   });
 };
